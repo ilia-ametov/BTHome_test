@@ -1,6 +1,7 @@
 #include "NimBLEDevice.h"
 #include "NimBLEBeacon.h"
 #include "esp_sleep.h"
+#include <BTHome.h>
 
 /*
 Full message example:
@@ -61,9 +62,10 @@ A BTHome receiver will stop parsing object ids as soon as it finds an object id 
 #define DEEP_SLEEP_DURATION 1                              // sleep x seconds and then wake up
 #define BEACON_UUID "e61bd6a6-f5bd-4004-9256-0843610b9de7" // UUID 1 128-Bit (may use linux tool uuidgen or random numbers via https://www.uuidgenerator.net/)
 
-RTC_DATA_ATTR static uint32_t bootCount = 5060; // remember number of boots in RTC Memory
+RTC_DATA_ATTR static uint32_t bootCount = 0; // remember number of boots in RTC Memory
 
 BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+bthome::PayloadBuilder btHomePayloadBuilder("HON 203");
 
 void setBeacon()
 {
@@ -75,38 +77,14 @@ void setBeacon()
 
   oAdvertisementData.setFlags(0x06); // this is 00000110. Bit 1 and bit 2 are 1, meaning: Bit 1: “LE General Discoverable Mode” Bit 2: “BR/EDR Not Supported”
 
-  std::string strServiceData = "";
-  String deviceName = "HON 20";                   // needs to only be 10 characters long
-  int deviceNameLength = deviceName.length() + 1; // Length + 1 here as we need to capture the null terminator
-  char deviceNameBuffer[deviceNameLength];
-  deviceName.toCharArray(deviceNameBuffer, deviceNameLength);
-  strServiceData += (char)deviceNameLength; // Length
-  strServiceData += (char)0x09;             // Type = Complete local name
-  strServiceData += deviceNameBuffer;
+  btHomePayloadBuilder.resetServiceData();
+  btHomePayloadBuilder.addPressure(1000 + static_cast<float>(bootCount));
+  btHomePayloadBuilder.addTemperature(5 + static_cast<float>(bootCount) / 10);
+  btHomePayloadBuilder.addHumidity(40 + static_cast<float>(bootCount) / 10);
 
-  std::string strServiceData2 = "";
-  strServiceData2 += 0x0A; // Length
-  strServiceData2 += 0x16; // Type = Service Data - 16-bit UUID
+  std::string payload = btHomePayloadBuilder.getAdvertisingPayload();
 
-  // UUID (D2FC):
-  strServiceData2 += 0xD2;
-  strServiceData2 += 0xFC;
-
-  // BTHome Device Information (0x40): not encrypted, BTHome version 2
-  strServiceData2 += 0x40;
-
-  // Temperature measurement (0x02 C409)
-  strServiceData2 += 0x02;
-  strServiceData2 += 0xC4;
-  strServiceData2 += 0x09;
-
-  // Humidity measurement (0x03 BF13)
-  strServiceData2 += 0x03;
-  strServiceData2 += (char)(bootCount & 0xFF);          // bootCount lower byte
-  strServiceData2 += (char)((bootCount & 0xFF00) >> 8); // bootCount upper byte
-
-  oAdvertisementData.addData(strServiceData);
-  oAdvertisementData.addData(strServiceData2);
+  oAdvertisementData.addData(payload);
   pAdvertising->setAdvertisementData(oAdvertisementData);
   pAdvertising->setScanResponseData(oScanResponseData);
   /**  pAdvertising->setAdvertisementType(ADV_TYPE_NONCONN_IND);
