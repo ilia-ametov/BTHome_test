@@ -11,6 +11,31 @@ namespace bthome
 
 	PayloadBuilder::PayloadBuilder(std::string deviceName) : deviceName(deviceName) {}
 
+	void PayloadBuilder::addCo2(uint16_t const data)
+	{
+		this->addServiceDataItem(DataType::co2, data);
+	}
+
+	void PayloadBuilder::addCount(uint8_t const data)
+	{
+		this->addServiceDataItem(DataType::count1, data);
+	}
+
+	void PayloadBuilder::addCount(uint16_t const data)
+	{
+		this->addServiceDataItem(DataType::count2, data);
+	}
+
+	void PayloadBuilder::addCount(uint32_t const data)
+	{
+		this->addServiceDataItem(DataType::count3, data);
+	}
+
+	void PayloadBuilder::addTvoc(uint16_t const data)
+	{
+		this->addServiceDataItem(DataType::tvoc, data);
+	}
+
 	void PayloadBuilder::addTemperature(float const data)
 	{
 		this->addServiceDataItem(DataType::temperature, static_cast<uint64_t>(data * 100.0f));
@@ -24,6 +49,11 @@ namespace bthome
 	void PayloadBuilder::addPressure(float const data)
 	{
 		this->addServiceDataItem(DataType::pressure, static_cast<uint64_t>(data * 100.0f));
+	}
+
+	void PayloadBuilder::addGenericBoolean(bool const data)
+	{
+		this->addServiceDataItem(DataType::genericBoolean, data);
 	}
 
 	std::string PayloadBuilder::getAdvertisingPayload()
@@ -80,8 +110,18 @@ namespace bthome
 			serviceDataSize += 1; // Data Type size
 			switch (this->serviceDataPayload[i].dataType)
 			{
+			case DataType::packetId:
+			case DataType::battery:
+			case DataType::count1:
+			case DataType::genericBoolean:
+				serviceData += (char)(this->serviceDataPayload[i].dataValue & 0xFF);
+				serviceDataSize += 1;
+				break;
+			case DataType::co2:
+			case DataType::count2:
 			case DataType::temperature:
 			case DataType::humidity:
+			case DataType::tvoc:
 				serviceData += (char)(this->serviceDataPayload[i].dataValue & 0xFF);
 				serviceData += (char)((this->serviceDataPayload[i].dataValue >> 8) & 0xFF);
 				serviceDataSize += 2;
@@ -91,6 +131,13 @@ namespace bthome
 				serviceData += (char)((this->serviceDataPayload[i].dataValue >> 8) & 0xFF);
 				serviceData += (char)((this->serviceDataPayload[i].dataValue >> 16) & 0xFF);
 				serviceDataSize += 3;
+				break;
+			case DataType::count3:
+				serviceData += (char)(this->serviceDataPayload[i].dataValue & 0xFF);
+				serviceData += (char)((this->serviceDataPayload[i].dataValue >> 8) & 0xFF);
+				serviceData += (char)((this->serviceDataPayload[i].dataValue >> 16) & 0xFF);
+				serviceData += (char)((this->serviceDataPayload[i].dataValue >> 24) & 0xFF);
+				serviceDataSize += 4;
 				break;
 			}
 		}

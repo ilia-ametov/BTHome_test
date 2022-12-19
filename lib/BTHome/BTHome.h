@@ -8,7 +8,48 @@ namespace bthome
 	enum class DataType : uint8_t
 	{
 		packetId = 0x00,
+
+		// Data type:	uint8 (1 byte)
+		// Factor:		1
+		// Example:		0161
+		// Result:		97
+		// Unit:		%
 		battery = 0x01,
+
+		// Data type:	uint16 (2 bytes)
+		// Factor:		1
+		// Example:		12E204
+		// Result:		1250
+		// Unit:		ppm
+		co2 = 0x12,
+
+		// Data type:	uint (1 bytes)
+		// Factor:		1
+		// Example:		0960
+		// Result:		96
+		// Unit:
+		count1 = 0x09,
+
+		// Data type:	uint (2 bytes)
+		// Factor:		1
+		// Example:		3D0960
+		// Result:		24585
+		// Unit:
+		count2 = 0x3D,
+
+		// Data type:	uint (4 bytes)
+		// Factor:		1
+		// Example:		3E2A2C0960
+		// Result:		1611213866
+		// Unit:
+		count3 = 0x3E,
+
+		// Data type:	uint16 (2 bytes)
+		// Factor:		1
+		// Example:		133301
+		// Result:		307
+		// Unit:		ug/m3
+		tvoc = 0x13,
 
 		// Data type:	sint16 (2 bytes)
 		// Factor:		0.01
@@ -30,6 +71,12 @@ namespace bthome
 		// Result:		1008.83
 		// Unit:		hPa
 		pressure = 0x04,
+
+		// Data type:	uint8 (1 byte)
+		// Factor:		0.01
+		// Example:		0F01
+		// Result:		1 (True = On)
+		genericBoolean = 0x0F,
 	};
 
 	struct ServiceDataItem
@@ -44,9 +91,15 @@ namespace bthome
 	public:
 		PayloadBuilder(std::string deviceName);
 
+		void addCo2(uint16_t const data);
+		void addCount(uint8_t const data);
+		void addCount(uint16_t const data);
+		void addCount(uint32_t const data);
+		void addTvoc(uint16_t const data);
 		void addTemperature(float const data);
 		void addHumidity(float const data);
 		void addPressure(float const data);
+		void addGenericBoolean(bool const data);
 		std::string getAdvertisingPayload();
 		void resetServiceData();
 

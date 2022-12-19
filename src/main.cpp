@@ -2,6 +2,7 @@
 #include "NimBLEBeacon.h"
 #include "esp_sleep.h"
 #include <BTHome.h>
+#include <Bme680.h>
 
 /*
 Full message example:
@@ -60,60 +61,113 @@ A BTHome receiver will stop parsing object ids as soon as it finds an object id 
 */
 
 #define DEEP_SLEEP_DURATION 1                              // sleep x seconds and then wake up
-#define BEACON_UUID "e61bd6a6-f5bd-4004-9256-0843610b9de7" // UUID 1 128-Bit (may use linux tool uuidgen or random numbers via https://www.uuidgenerator.net/)
-
-RTC_DATA_ATTR static uint32_t bootCount = 0; // remember number of boots in RTC Memory
+#define BEACON_UUID "fd480c10-4006-4895-8f31-03a0f0cd3d4e" // UUID 1 128-Bit (may use linux tool uuidgen or random numbers via https://www.uuidgenerator.net/)
 
 BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-bthome::PayloadBuilder btHomePayloadBuilder("HON 203");
+bthome::PayloadBuilder btHomePayloadBuilder("HON");
+
+Bme680 bme680;
+
+unsigned long lastAdvertisingSwitchMillis = 0;
+
+int dataToSend = 0;
+
+bool sensorDataReady = false;
 
 void setBeacon()
 {
-  BLEBeacon oBeacon = BLEBeacon();
-  oBeacon.setManufacturerId(0x4C00); // fake Apple 0x004C LSB (ENDIAN_CHANGE_U16!)
-  oBeacon.setProximityUUID(BLEUUID(BEACON_UUID));
-  BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
-  BLEAdvertisementData oScanResponseData = BLEAdvertisementData();
+  if (sensorDataReady)
+  {
 
-  oAdvertisementData.setFlags(0x06); // this is 00000110. Bit 1 and bit 2 are 1, meaning: Bit 1: “LE General Discoverable Mode” Bit 2: “BR/EDR Not Supported”
+    Serial.printf("Advertising data from BME680 %d\n\n", dataToSend);
 
-  btHomePayloadBuilder.resetServiceData();
-  btHomePayloadBuilder.addPressure(1000 + static_cast<float>(bootCount));
-  btHomePayloadBuilder.addTemperature(5 + static_cast<float>(bootCount) / 10);
-  btHomePayloadBuilder.addHumidity(40 + static_cast<float>(bootCount) / 10);
+    BLEBeacon oBeacon = BLEBeacon();
+    oBeacon.setManufacturerId(0x4C00); // fake Apple 0x004C LSB (ENDIAN_CHANGE_U16!)
+    oBeacon.setProximityUUID(BLEUUID(BEACON_UUID));
+    BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
+    BLEAdvertisementData oScanResponseData = BLEAdvertisementData();
 
-  std::string payload = btHomePayloadBuilder.getAdvertisingPayload();
+    oAdvertisementData.setFlags(0x06); // this is 00000110. Bit 1 and bit 2 are 1, meaning: Bit 1: “LE General Discoverable Mode” Bit 2: “BR/EDR Not Supported”
 
-  oAdvertisementData.addData(payload);
-  pAdvertising->setAdvertisementData(oAdvertisementData);
-  pAdvertising->setScanResponseData(oScanResponseData);
-  /**  pAdvertising->setAdvertisementType(ADV_TYPE_NONCONN_IND);
-   *    Advertising mode. Can be one of following constants:
-   *  - BLE_GAP_CONN_MODE_NON (non-connectable; 3.C.9.3.2).
-   *  - BLE_GAP_CONN_MODE_DIR (directed-connectable; 3.C.9.3.3).
-   *  - BLE_GAP_CONN_MODE_UND (undirected-connectable; 3.C.9.3.4).
-   */
-  pAdvertising->setAdvertisementType(BLE_GAP_CONN_MODE_NON);
+    btHomePayloadBuilder.resetServiceData();
+
+    switch (dataToSend)
+    {
+    case 0:
+      btHomePayloadBuilder.addTemperature(bme680.iaqSensor.temperature);
+      btHomePayloadBuilder.addHumidity(bme680.iaqSensor.humidity);
+      btHomePayloadBuilder.addPressure(bme680.iaqSensor.pressure / 100);
+      dataToSend++;
+      break;
+    case 1:
+      btHomePayloadBuilder.addGenericBoolean(bme680.iaqSensor.iaqAccuracy == 3);
+      if (bme680.iaqSensor.iaqAccuracy == 3)
+      {
+        btHomePayloadBuilder.addCount(static_cast<uint16_t>(bme680.iaqSensor.iaq));
+      }
+      if (bme680.iaqSensor.co2Accuracy == 3)
+      {
+        btHomePayloadBuilder.addCo2(static_cast<uint16_t>(bme680.iaqSensor.co2Equivalent));
+      }
+      if (bme680.iaqSensor.breathVocAccuracy == 3)
+      {
+        btHomePayloadBuilder.addTvoc(static_cast<uint16_t>(bme680.iaqSensor.breathVocEquivalent * 1000));
+      }
+      // btHomePayloadBuilder.addCount3(static_cast<uint32_t>(bme680.iaqSensor.gasResistance));
+      dataToSend = 0;
+      break;
+    }
+
+    oAdvertisementData.addData(btHomePayloadBuilder.getAdvertisingPayload());
+    pAdvertising->setAdvertisementData(oAdvertisementData);
+    pAdvertising->setScanResponseData(oScanResponseData);
+    /**  pAdvertising->setAdvertisementType(ADV_TYPE_NONCONN_IND);
+     *    Advertising mode. Can be one of following constants:
+     *  - BLE_GAP_CONN_MODE_NON (non-connectable; 3.C.9.3.2).
+     *  - BLE_GAP_CONN_MODE_DIR (directed-connectable; 3.C.9.3.3).
+     *  - BLE_GAP_CONN_MODE_UND (undirected-connectable; 3.C.9.3.4).
+     */
+    pAdvertising->setAdvertisementType(BLE_GAP_CONN_MODE_NON);
+  }
 }
 
 void setup()
 {
   Serial.begin(115200);
-  bootCount++;
-  BLEDevice::init(""); // Create the BLE Device
 
-  BLEDevice::setPower(ESP_PWR_LVL_N12);
+  Wire.begin();
+  bme680.begin();
+  delay(2000);
 
-  setBeacon();
-  pAdvertising->start();
-  Serial.println("Advertizing started for 10s...");
-  delay(10000);
-  pAdvertising->stop();
-  Serial.printf("Enter deep sleep for %ds\n", DEEP_SLEEP_DURATION);
-  esp_deep_sleep(1000000LL * DEEP_SLEEP_DURATION);
-  Serial.printf("In deep sleep\n");
+  BLEDevice::init("HON"); // Create the BLE Device
+  // BLEDevice::setPower(ESP_PWR_LVL_P9);
 }
 
 void loop()
 {
+  if (!bme680.hasNotRecoverableError())
+  {
+    sensorDataReady = bme680.run();
+  }
+  else
+  {
+    sensorDataReady = false;
+  }
+  if (pAdvertising->isAdvertising())
+  {
+    if (millis() - lastAdvertisingSwitchMillis >= 200)
+    {
+      pAdvertising->stop();
+      lastAdvertisingSwitchMillis = millis();
+    }
+  }
+  else if (sensorDataReady)
+  {
+    if (millis() - lastAdvertisingSwitchMillis >= 30000)
+    {
+      setBeacon();
+      pAdvertising->start();
+      lastAdvertisingSwitchMillis = millis();
+    }
+  }
 }
