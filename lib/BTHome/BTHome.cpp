@@ -74,14 +74,19 @@ namespace bthome
 
 	void PayloadBuilder::addServiceDataItem(DataType dataType, uint64_t scaledDataValue)
 	{
-		ServiceDataItem *previousServiceDataPayload = this->serviceDataPayload;
-		this->serviceDataPayload = new ServiceDataItem[this->serviceDataPayloadSize + 1];
-		for (uint8_t i = 0; i < this->serviceDataPayloadSize; i++)
+		ServiceDataItem *updatedServiceDataPayload = new ServiceDataItem[this->serviceDataPayloadSize + 1];
+		if (this->serviceDataPayloadSize != 0)
 		{
-			this->serviceDataPayload[i] = previousServiceDataPayload[i];
+			for (uint8_t i = 0; i < this->serviceDataPayloadSize; i++)
+			{
+				updatedServiceDataPayload[i] = serviceDataPayload[i];
+			}
+			delete[] this->serviceDataPayload;
 		}
 		this->serviceDataPayloadSize++;
-		this->serviceDataPayload[this->serviceDataPayloadSize - 1] = {dataType, scaledDataValue};
+		updatedServiceDataPayload[this->serviceDataPayloadSize - 1] = {dataType, scaledDataValue};
+
+		this->serviceDataPayload = updatedServiceDataPayload;
 	}
 
 	std::string PayloadBuilder::getServiceData()

@@ -105,7 +105,7 @@ namespace bthome
 
 	protected:
 		std::string deviceName;
-		ServiceDataItem *serviceDataPayload = new ServiceDataItem[0];
+		ServiceDataItem *serviceDataPayload;
 		uint8_t serviceDataPayloadSize = 0;
 
 		std::string getServiceData();
